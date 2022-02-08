@@ -19,7 +19,7 @@ ia = imdb.IMDb()
 log = logging.getLogger(__name__)
 
 
-def add_year_matching(master_table: MovieTableWrapper, supplementary_table: pd.DataFrame, matches: List[Tuple], title: str, year: int) -> List[Tuple]:
+def add_year_matching(master_table: MovieTableWrapper, matches: List[Tuple], title: str, year: int) -> List[Tuple]:
     new_matches = []
     for match in matches:
         match_year = master_table.data.loc[master_table.data['title']
@@ -128,7 +128,7 @@ def merge_tables(args: Namespace) -> None:
         )
         if matches:
             matches = add_year_matching(
-                master_table, supplementary_table, matches, row['title'], row['year'])
+                master_table, matches, row['title'], row['year'])
             selected_match = select_match(
                 row['title'], matches, args.interactive)
             if selected_match:
