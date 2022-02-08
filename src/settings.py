@@ -17,9 +17,9 @@ def get_env(key: str, default: Any) -> Any:
     if env_value:
         if type(default) == list:
             return env_value.split(',')
-        if type(default) == int:
+        elif type(default) == int:
             return int(env_value)
-        if type(default) == float:
+        elif type(default) == float:
             return float(env_value)
         return env_value
     return default
