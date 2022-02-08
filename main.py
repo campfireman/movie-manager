@@ -3,11 +3,11 @@ import logging
 
 import coloredlogs
 
-from src import controllers
+from src import controllers, settings
 
 log = logging.getLogger(__name__)
 
-coloredlogs.install(level='INFO')
+coloredlogs.install(level=settings.LOG_LEVEL)
 
 
 def main() -> int:
