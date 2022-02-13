@@ -20,7 +20,7 @@ ia = imdb.IMDb()
 log = logging.getLogger(__name__)
 
 
-def add_year_matching(master_table: MovieTableWrapper, matches: List[Tuple], title: str, year: int) -> List[Tuple]:
+def add_heuristic(master_table: MovieTableWrapper, matches: List[Tuple], title: str, year: int) -> List[Tuple]:
     new_matches = []
     for match in matches:
         match_year = master_table.data.loc[master_table.data['title']
@@ -53,16 +53,12 @@ def select_match(title: str, matches: List[Tuple], is_interactive: bool) -> Tupl
             return None
 
 
-def add_entry(table: MovieTableWrapper, title: str, year: int, is_interactive: bool) -> None:
-    entry = pd.DataFrame(data=[[None]*len(table.data.columns)],
-                         columns=table.data.columns, index=None)
-    entry['title'] = title
-    entry['year'] = year
+def add_entry(table: MovieTableWrapper, row, is_interactive: bool) -> None:
     try:
-        add_imdb_info(entry, is_interactive)
+        add_imdb_info(row, is_interactive)
     except errors.NoImdbInfo:
-        log.warning(f'No IMDB matches found for {entry["title"]}')
-    table.add_data(entry)
+        log.warning(f'No IMDB matches found for {row["title"]}')
+    table.add_data(row)
 
 
 def add_imdb_info(entry: pd.DataFrame, is_interactive: bool, add_canonical_title: bool = False) -> pd.DataFrame:
@@ -125,20 +121,20 @@ def merge_tables(args: Namespace) -> None:
         args.supplementary_table_path)
 
     # copy master table
-    # TODO: Will fail on windows bc of basename not returning filename
-    master_table_name = os.path.basename(args.master_table_path).split('.')[0]
-    master_table_backup_filename = f'{master_table_name}_{datetime.datetime.now().isoformat()}.csv'
-    master_table_backup_directory = os.path.join(os.path.dirname(
-        args.master_table_path), settings.MASTER_TABLE_BACKUP_DIRECTORY)
-    if not os.path.exists(master_table_backup_directory):
-        os.makedirs(master_table_backup_directory)
-    master_table_backup_path = os.path.join(
-        master_table_backup_directory, master_table_backup_filename)
-    log.info(f'Copying master table to: {master_table_backup_path}')
-    master_table.save(master_table_backup_path)
+    master_table.backup(args.master_table_path)
 
     # add non-duplicates from supplementary table to master table
     for _, row in tqdm(list(supplementary_table.data.iterrows())):
+        id_match = master_table.data.loc[master_table.data['imdb_id']
+                                         == row['imdb_id']]
+        if not id_match.empty:
+            if id_match.shape[0] > 1:
+                log.warning(
+                    f'Found more than one match for {row["title"]} with ID {row["imdb_id"]}')
+            log.warning(
+                f'Found matching ID for {row["title"]} ({row["imdb_id"]})')
+            continue
+
         matches = []
         matches = process.extract(
             row['title'],
@@ -146,7 +142,7 @@ def merge_tables(args: Namespace) -> None:
             limit=settings.MATCH_LIST_LIMIT,
         )
         if matches:
-            matches = add_year_matching(
+            matches = add_heuristic(
                 master_table, matches, row['title'], row['year'])
             selected_match = select_match(
                 row['title'], matches, args.interactive)
@@ -156,12 +152,12 @@ def merge_tables(args: Namespace) -> None:
                 continue
             else:
                 add_entry(
-                    master_table, row['title'], row['year'], args.interactive)
+                    master_table, row, args.interactive)
         else:
             log.info(
                 f'No matches found for {row["title"]}. Adding by default.')
             add_entry(
-                master_table, row['title'], row['year'], args.interactive)
+                master_table, row, args.interactive)
 
     log.info('Final table:\n' + str(master_table))
     log.info(f'Writing new table to: {args.master_table_path}')
