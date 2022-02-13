@@ -7,11 +7,12 @@ from operator import itemgetter
 from typing import List, Tuple
 
 import imdb
+import numpy as np
 import pandas as pd
 from fuzzywuzzy import process
 from tqdm import tqdm
 
-from src import settings
+from src import errors, settings
 from src.gui import CliGui as Gui
 from src.models import MovieTableWrapper
 
@@ -57,12 +58,29 @@ def add_entry(table: MovieTableWrapper, title: str, year: int, is_interactive: b
                          columns=table.data.columns, index=None)
     entry['title'] = title
     entry['year'] = year
-    search = ia.search_movie(title)
+    try:
+        add_imdb_info(entry, is_interactive)
+    except errors.NoImdbInfo:
+        log.warning(f'No IMDB matches found for {entry["title"]}')
+    table.add_data(entry)
+
+
+def add_imdb_info(entry: pd.DataFrame, is_interactive: bool, add_canonical_title: bool = False) -> pd.DataFrame:
+    if entry['imdb_id'] and not pd.isnull(entry['imdb_id']):
+        search = ia.get_movie(entry['imdb_id'])
+        if add_canonical_title:
+            entry['title'] = search['canonical title']
+        return entry
+
+    search = ia.search_movie(entry['title'])
+    if len(search) == 0:
+        raise errors.NoImdbInfo
+
     for result in search:
         result['year'] = result.get('year', 0)
-        if result['year'] == year:
+        if result['year'] == entry['year']:
             result['score'] = 100
-        elif result['year'] - 1 == year or result['year'] + 1 == year:
+        elif result['year'] - 1 == entry['year'] or result['year'] + 1 == entry['year']:
             result['score'] = 50
         else:
             result['score'] = 0
@@ -77,20 +95,21 @@ def add_entry(table: MovieTableWrapper, title: str, year: int, is_interactive: b
                 break
         Gui.print_table(['Title', 'Year', 'Score'], data)
         choice = Gui.get_int_choice(
-            'Choose an IMDB entry. If none matches choose 0.', 1, list(range(0, len(data) + 1)))
+            f'Choose an IMDB entry for {entry["title"]}. If none matches choose 0.', 1, list(range(0, len(data) + 1)))
         if choice > 0:
             choice -= 1
             imdb_link = f'https://www.imdb.com/title/tt{search[choice].getID()}/'
             imdb_id = search[choice].getID()
-
+            if add_canonical_title:
+                entry['title'] = search[choice]['canonical title']
     else:
         if len(search) > 0:
             imdb_link = f'https://www.imdb.com/title/tt{search[0].getID()}/'
             imdb_id = search[0].getID()
 
-    entry['imdb_link'] = f'{imdb_link}'
+    entry['imdb_link'] = imdb_link
     entry['imdb_id'] = imdb_id
-    table.add_data(entry)
+    return entry
 
 
 def merge_tables(args: Namespace) -> None:
@@ -147,3 +166,26 @@ def merge_tables(args: Namespace) -> None:
     log.info('Final table:\n' + str(master_table))
     log.info(f'Writing new table to: {args.master_table_path}')
     master_table.save(args.master_table_path)
+
+
+def add_info(args: Namespace) -> None:
+    if args.interactive:
+        log.info('Starting in interactive mode')
+    else:
+        log.warning('Not in interactive mode!')
+        if not Gui.prompt_confirm('Do you want to continue?'):
+            sys.exit(0)
+
+    table = MovieTableWrapper.from_csv(args.table_path)
+
+    table.backup(args.table_path)
+
+    # add non-duplicates from supplementary table to master table
+    for i, row in tqdm(list(table.data.iterrows())):
+        try:
+            table.data.loc[i, :] = add_imdb_info(
+                row, args.interactive, args.add_canonical_title)
+        except errors.NoImdbInfo:
+            log.warning(f'No IMDB matches found for {row["title"]}')
+
+    table.save(args.table_path)

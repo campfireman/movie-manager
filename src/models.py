@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import logging
 import os
 from inspect import getmembers, isfunction
@@ -38,6 +39,7 @@ class TableValidator:
         if os.path.exists(self.path):
             with open(self.path, 'r') as table:
                 header = table.readline().rstrip().lower().split(',')
+                header = [x.strip() for x in header]
                 missing_columns = []
                 for column in settings.REQUIRED_COLUMNS:
                     if column not in header:
@@ -65,6 +67,19 @@ class MovieTableWrapper:
         self.data.to_csv(path, index=None)
         return
 
+    def backup(self, path: str) -> None:
+        # TODO: Will fail on windows bc of basename not returning filename
+        table_name = os.path.basename(path).split('.')[0]
+        table_backup_filename = f'{table_name}_{datetime.datetime.now().isoformat()}.csv'
+        table_backup_directory = os.path.join(os.path.dirname(
+            path), settings.TABLE_BACKUP_DIRECTORY)
+        if not os.path.exists(table_backup_directory):
+            os.makedirs(table_backup_directory)
+        table_backup_path = os.path.join(
+            table_backup_directory, table_backup_filename)
+        log.info(f'Copying {table_name} table to: {table_backup_path}')
+        self.save(table_backup_path)
+
     def add_data(self, new_data: Dict[List]) -> None:
         self.data = pd.concat([self.data, new_data], ignore_index=True)
 
@@ -79,4 +94,9 @@ class MovieTableWrapper:
         with open(filepath, 'r') as file:
             data = pd.read_csv(file, index_col=None)
             data.columns = map(str.lower, data.columns)
+            data.columns = map(str.strip, data.columns)
+            no_rows = data.shape[0]
+            for col in settings.OPTIONAL_COLUMNS:
+                if col not in data:
+                    data[col] = no_rows * ['']
             return cls(data)

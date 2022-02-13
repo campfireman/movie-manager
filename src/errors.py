@@ -1,0 +1,2 @@
+class NoImdbInfo(Exception):
+    pass

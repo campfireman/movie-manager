@@ -23,10 +23,20 @@ def main() -> int:
     parser_merge.add_argument('supplementary_table_path', type=str,
                               help='The path of the supplementary table to be merged into the master table')
 
+    parser_add_info = subparsers.add_parser(
+        'addinfo', help='Add IMDB id and link to entries')
+    parser_add_info.add_argument('table_path', type=str,
+                                 help='The path of the table to be extended')
+    parser_add_info.add_argument('--add_canonical_title', help='Replace title with canonical IMDB title',
+                                 action='store_true', default=False)
+
     args = parser.parse_args()
 
     if (args.command == 'merge'):
         controllers.merge_tables(args)
+
+    if (args.command == 'addinfo'):
+        controllers.add_info(args)
 
 
 if __name__ == '__main__':
