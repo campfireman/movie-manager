@@ -30,7 +30,7 @@ def main() -> int:
     parser_add_info.add_argument('table_path', type=str,
                                  help='The path of the table to be extended')
     parser_add_info.add_argument('--add_canonical_title', help='Replace title with canonical IMDB title',
-                                 action='store_true', default=False)
+                                 action='store_false', default=True)
 
     args = parser.parse_args()
 
