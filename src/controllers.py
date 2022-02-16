@@ -85,24 +85,35 @@ def add_imdb_info(entry: pd.DataFrame, is_interactive: bool, add_canonical_title
 
     for result in search:
         result['year'] = result.get('year', 0)
+        entry['year'] = int(entry['year'])
         if result['year'] == entry['year']:
-            result['score'] = 100
+            result['heuristic'] = 100
         elif result['year'] - 1 == entry['year'] or result['year'] + 1 == entry['year']:
-            result['score'] = 50
+            result['heuristic'] = 50
         else:
-            result['score'] = 0
-    search.sort(key=itemgetter('score'), reverse=True)
+            result['heuristic'] = 0
+
+    search.sort(key=itemgetter('heuristic'), reverse=True)
     imdb_link = ''
     imdb_id = ''
     if is_interactive:
         data = []
         for i, item in enumerate(search):
-            data.append((item['title'], item['year'], item['score']))
+            full_item = ia.get_movie(item.getID())
+            director_list = full_item.get('director', [])
+            directors = ', '.join(
+                list(map(lambda x: x['name'], director_list))) if director_list else ''
+            extra = ''
+            if 'akas' in full_item:
+                extra = ', '.join(full_item['akas'])
+            data.append((item['title'], item['kind'],
+                        item['year'], directors, extra, item['heuristic']))
             if i == settings.IMDB_LIST_LIMIT - 1:
                 break
-        Gui.print_table(['Title', 'Year', 'Score'], data)
+        Gui.print_table(
+            ['Title', 'Kind', 'Year', 'Directors', 'Extra', 'Heuristic'], data)
         choice = Gui.get_int_choice(
-            f'Choose an IMDB entry for {entry["title"]}. If none matches choose 0.', 1, list(range(0, len(data) + 1)))
+            f'Choose an IMDB entry for "{entry["title"]} ({entry["year"]})". If none matches choose 0.', 1, list(range(0, len(data) + 1)))
         if choice > 0:
             choice -= 1
             imdb_link = f'https://www.imdb.com/title/tt{search[choice].getID()}/'
