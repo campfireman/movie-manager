@@ -28,7 +28,8 @@ def get_env(key: str, default: Any) -> Any:
 TABLE_BACKUP_DIRECTORY = get_env(
     'TABLE_BACKUP_DIRECTORY', 'table_backups')
 REQUIRED_COLUMNS = get_env('REQUIRED_COLUMNS', ['title', 'year'])
-OPTIONAL_COLUMNS = get_env('OPTIONAL_COLUMNS', ['imdb_id', 'imdb_link'])
+OPTIONAL_COLUMNS = get_env(
+    'OPTIONAL_COLUMNS', ['origin', 'imdb_id', 'imdb_link'])
 NON_INTERACTIVE_MATCH_THRESHOLD = get_env(
     'NON_INTERACTIVE_MATCH_THRESHOLD', 95)
 IMDB_LIST_LIMIT = get_env('IMDB_LIST_LIMIT', 10)

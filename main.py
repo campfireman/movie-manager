@@ -22,6 +22,8 @@ def main() -> int:
                               help='The path of the master table')
     parser_merge.add_argument('supplementary_table_path', type=str,
                               help='The path of the supplementary table to be merged into the master table')
+    parser_merge.add_argument('origin', type=str,
+                              help='The name of the supplementary table to be noted as origin in the master table')
 
     parser_add_info = subparsers.add_parser(
         'addinfo', help='Add IMDB id and link to entries')

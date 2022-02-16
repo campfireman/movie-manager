@@ -57,12 +57,15 @@ def select_match(title: str, matches: List[Tuple], is_interactive: bool) -> Tupl
             return None
 
 
-def add_entry(table: MovieTableWrapper, row, is_interactive: bool) -> None:
+def add_entry(table: MovieTableWrapper, row: pd.DataFrame, args: Namespace) -> None:
+    if not row['origin']:
+        row['origin'] = args.origin
+
     try:
-        add_imdb_info(row, is_interactive)
+        add_imdb_info(row, args.interactive)
     except errors.NoImdbInfo:
         log.warning(f'No IMDB matches found for {row["title"]}')
-    table.add_data(row)
+    table.add_row(row)
 
 
 def add_imdb_info(entry: pd.DataFrame, is_interactive: bool, add_canonical_title: bool = False) -> pd.DataFrame:
@@ -160,14 +163,14 @@ def merge_tables(args: Namespace) -> None:
                 continue
             else:
                 add_entry(
-                    master_table, row, args.interactive)
+                    master_table, row, args)
         else:
             log.info(
                 f'No matches found for {row["title"]}. Adding by default.')
             add_entry(
-                master_table, row, args.interactive)
+                master_table, row, args)
 
-    log.info('Final table:\n' + str(master_table))
+    log.info('Final table:\n' + str(master_table.data))
     log.info(f'Writing new table to: {args.master_table_path}')
     master_table.save(args.master_table_path)
 
