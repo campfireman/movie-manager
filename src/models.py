@@ -4,8 +4,9 @@ import datetime
 import logging
 import os
 from inspect import getmembers, isfunction
-from typing import Dict, List
+from typing import Dict, Iterable, List
 
+import numpy as np
 import pandas as pd
 
 from src import settings
@@ -80,8 +81,15 @@ class MovieTableWrapper:
         log.info(f'Copying {table_name} table to: {table_backup_path}')
         self.save(table_backup_path)
 
-    def add_data(self, new_data: Dict[List]) -> None:
-        self.data = pd.concat([self.data, new_data], ignore_index=True)
+    def add_row(self, new_row: pd.DataFrame) -> None:
+        row_to_add = {}
+        for col in self.data.columns:
+            if col in new_row:
+                row_to_add[col] = [new_row[col]]
+            else:
+                row_to_add[col] = [np.nan]
+        row_to_add = pd.DataFrame.from_dict(row_to_add)
+        self.data = pd.concat([self.data, row_to_add], ignore_index=True)
 
     @classmethod
     def from_csv(cls, filepath: str) -> MovieTableWrapper:
