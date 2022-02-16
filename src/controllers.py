@@ -23,6 +23,10 @@ log = logging.getLogger(__name__)
 def add_heuristic(master_table: MovieTableWrapper, matches: List[Tuple], title: str, year: int) -> List[Tuple]:
     new_matches = []
     for match in matches:
+        # if no_matches < settings.MATCH_LIST_LIMIT rest is padded with pandas nan
+        if pd.isnull(match[0]):
+            continue
+
         match_year = master_table.data.loc[master_table.data['title']
                                            == match[0]]['year'].iloc[0]
         match_coeff = 0
@@ -64,6 +68,10 @@ def add_entry(table: MovieTableWrapper, row, is_interactive: bool) -> None:
 def add_imdb_info(entry: pd.DataFrame, is_interactive: bool, add_canonical_title: bool = False) -> pd.DataFrame:
     if entry['imdb_id'] and not pd.isnull(entry['imdb_id']):
         search = ia.get_movie(entry['imdb_id'])
+        if not search:
+            log.warning(
+                f'Could not find a match for {entry["imdb_id"]} on IMDB, potentially invalid ID. Skipping')
+            return entry
         if add_canonical_title:
             entry['title'] = search['canonical title']
         return entry
