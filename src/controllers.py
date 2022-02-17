@@ -1,13 +1,12 @@
-import datetime
 import logging
-import os
+import re
 import sys
 from argparse import Namespace
 from operator import itemgetter
+from statistics import mean
 from typing import List, Tuple
 
 import imdb
-import numpy as np
 import pandas as pd
 from fuzzywuzzy import process
 from tqdm import tqdm
@@ -16,8 +15,19 @@ from src import errors, settings
 from src.gui import CliGui as Gui
 from src.models import MovieTableWrapper
 
-ia = imdb.IMDb()
+ia = None
+if settings.IMDB_DATABASE:
+    print('DB')
+    print(settings.IMDB_DATABASE)
+    ia = imdb.Cinemagoer('s3', settings.IMDB_DATABASE)
+else:
+    ia = imdb.Cinemagoer()
+
 log = logging.getLogger(__name__)
+
+
+def is_local_backend():
+    return settings.IMDB_DATABASE
 
 
 def add_heuristic(master_table: MovieTableWrapper, matches: List[Tuple], title: str, year: int) -> List[Tuple]:
@@ -80,50 +90,63 @@ def add_imdb_info(entry: pd.DataFrame, is_interactive: bool, add_canonical_title
         return entry
 
     search = ia.search_movie(entry['title'])
+    extended_search = []
     if len(search) == 0:
         raise errors.NoImdbInfo
+    for basic_result in search:
+        if is_local_backend():
+            # The local S3 imdb backend sometimes returns dates in the format "year-year" so taking the average of it...
+            result = ia.get_movie(basic_result.getID())
+            result_year = result.get('year', '0')
+            result_year = int(
+                mean(map(int, (result_year.split('-')))))
+        else:
+            result = basic_result
+            result_year = result.get('year', 0)
 
-    for result in search:
-        result['year'] = result.get('year', 0)
         entry['year'] = int(entry['year'])
-        if result['year'] == entry['year']:
+        if result_year == entry['year']:
             result['heuristic'] = 100
-        elif result['year'] - 1 == entry['year'] or result['year'] + 1 == entry['year']:
+        elif result_year - 1 == entry['year'] or result_year + 1 == entry['year']:
             result['heuristic'] = 50
         else:
             result['heuristic'] = 0
+        extended_search.append(result)
 
-    search.sort(key=itemgetter('heuristic'), reverse=True)
+    extended_search.sort(key=itemgetter('heuristic'), reverse=True)
     imdb_link = ''
     imdb_id = ''
     if is_interactive:
         data = []
-        for i, item in enumerate(search):
-            full_item = ia.get_movie(item.getID())
-            director_list = full_item.get('director', [])
-            directors = ', '.join(
-                list(map(lambda x: x['name'], director_list))) if director_list else ''
+        for i, item in enumerate(extended_search):
+            director_list = item.get('director', [])
+            if len(director_list) > 0 and isinstance(director_list[0], imdb.Person.Person):
+                director_list = list(map(lambda x: x['name'], director_list))
+            directors = ', '.join(director_list) if director_list else ''
             extra = ''
-            if 'akas' in full_item:
-                extra = ', '.join(full_item['akas'])
-            data.append((item['title'], item['kind'],
+            if 'akas' in item:
+                if len(item['akas']) > 0 and is_local_backend():
+                    item['akas'] = list(
+                        map(lambda x: x['title'], item['akas']))
+                extra = ', '.join(item['akas'])
+            data.append((item['title'],
                         item['year'], directors, extra, item['heuristic']))
             if i == settings.IMDB_LIST_LIMIT - 1:
                 break
         Gui.print_table(
-            ['Title', 'Kind', 'Year', 'Directors', 'Extra', 'Heuristic'], data)
+            ['Title', 'Year', 'Directors', 'Extra', 'Heuristic'], data)
         choice = Gui.get_int_choice(
             f'Choose an IMDB entry for "{entry["title"]} ({entry["year"]})". If none matches choose 0.', 1, list(range(0, len(data) + 1)))
         if choice > 0:
             choice -= 1
-            imdb_link = f'https://www.imdb.com/title/tt{search[choice].getID()}/'
-            imdb_id = search[choice].getID()
+            imdb_link = f'https://www.imdb.com/title/tt{extended_search[choice].getID()}/'
+            imdb_id = extended_search[choice].getID()
             if add_canonical_title:
-                entry['title'] = search[choice]['canonical title']
+                entry['title'] = extended_search[choice]['canonical title']
     else:
-        if len(search) > 0:
-            imdb_link = f'https://www.imdb.com/title/tt{search[0].getID()}/'
-            imdb_id = search[0].getID()
+        if len(extended_search) > 0:
+            imdb_link = f'https://www.imdb.com/title/tt{extended_search[0].getID()}/'
+            imdb_id = extended_search[0].getID()
 
     entry['imdb_link'] = imdb_link
     entry['imdb_id'] = imdb_id
