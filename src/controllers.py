@@ -68,7 +68,7 @@ def select_match(title: str, matches: List[Tuple], is_interactive: bool) -> Tupl
 
 
 def add_entry(table: MovieTableWrapper, row: pd.DataFrame, args: Namespace) -> None:
-    if not row['origin']:
+    if pd.isnull(row['origin']):
         row['origin'] = args.origin
 
     try:
