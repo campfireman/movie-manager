@@ -103,6 +103,7 @@ def add_imdb_info(entry: pd.DataFrame, is_interactive: bool, add_canonical_title
         else:
             result = basic_result
             result_year = result.get('year', 0)
+        result['year'] = result_year
 
         entry['year'] = int(entry['year'])
         if result_year == entry['year']:
